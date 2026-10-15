@@ -27,6 +27,22 @@
   .ticket .num .h{font-size:36px;vertical-align:super;}
   .ticket .num .code{font-size:34px;color:var(--white);letter-spacing:.03em;}
   .ticket .shot{font-size:14px;color:var(--white);background:rgba(0,0,0,.25);border-radius:10px;padding:10px 12px;margin-top:10px;}
+  @keyframes ticketIn{0%{opacity:0;transform:scale(.94) translateY(8px);}100%{opacity:1;transform:scale(1) translateY(0);}}
+  .ticket{animation:ticketIn .5s cubic-bezier(.2,.8,.2,1) both;}
+  .ticket .num .code{opacity:0;transition:opacity .35s ease;}
+  .ticket .num .code.show{opacity:1;}
+  /* scam simulation */
+  .smsbubble{background:#e9edf2;color:#111;border-radius:14px;padding:12px 14px;text-align:left;max-width:95%;}
+  .smshdr{font-size:11px;color:#667;font-weight:700;margin-bottom:5px;letter-spacing:.02em;}
+  .smsbody{font-size:14px;line-height:1.4;}
+  .smslink{color:#1a66ff;text-decoration:underline;word-break:break-all;}
+  .simact{display:block;width:100%;margin-top:14px;background:#e3342f;color:#fff;font-weight:800;font-size:15px;border:none;border-radius:10px;padding:13px;cursor:pointer;}
+  .simact:active{transform:scale(.98);}
+  .simhint{font-size:11px;color:var(--dim);text-align:center;margin-top:7px;}
+  .simreveal{display:none;animation:ticketIn .45s cubic-bezier(.2,.8,.2,1) both;}
+  .simreveal.show{display:block;}
+  .simgot{font-size:22px;font-weight:900;color:var(--orange);text-align:center;margin-bottom:6px;}
+  .simwhy{font-size:14px;color:var(--white);margin-bottom:12px;}
 
   .block{background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:14px;padding:18px;margin-bottom:18px;}
   .block h2{font-size:16px;font-weight:800;margin-bottom:10px;}
@@ -47,6 +63,9 @@
   .readout .row span:last-child{font-weight:700;text-align:right;max-width:60%;}
   .punch{font-size:14px;color:var(--white);background:rgba(255,153,0,.12);border-left:3px solid var(--orange);padding:11px 13px;border-radius:0 10px 10px 0;margin-top:6px;}
   .foot{font-size:12px;color:#5a6472;text-align:center;margin-top:22px;}
+  .surv .survsub{font-size:12.5px;color:var(--dim);margin:-4px 0 12px;}
+  .surv .readout .row{opacity:0;transform:translateY(4px);transition:opacity .35s ease, transform .35s ease;}
+  .surv.go .readout .row{opacity:1;transform:none;}
 </style>
 </head>
 <body>
@@ -62,19 +81,13 @@
       <div class="shot">📸 Toma captura de pantalla — tu <strong>número + código</strong> es tu boleto. Sin el código, no cuenta.</div>
     </div>
 
-    <!-- 2. Takeaway (replaces the email) -->
-    <div class="block">
-      <h2>Llévate 2 cosas a casa hoy</h2>
-      <div class="step"><div class="ic">🔐</div><div><strong>Verificación en dos pasos</strong> en tu correo y tu banca. Aunque te roben la contraseña, sin ese código no entran.</div></div>
-      <div class="step"><div class="ic">🗣️</div><div><strong>Una palabra secreta en familia.</strong> Si llega una llamada con prisa y pánico — "tuve un accidente, manda dinero" — pide la palabra. Si no la saben, cuelga.</div></div>
+    <!-- 2. "What we already know about you" — auto-reveals, zero-data -->
+    <div class="block surv" id="surv">
+      <h2>👁️ Esto ya lo sabemos de ti</h2>
+      <div class="survsub">Solo por escanear. No escribiste nada: tu teléfono lo entregó solo.</div>
+      <div class="readout" id="survrows"></div>
+      <div class="punch">Y esto es lo <em>mínimo</em>. Escaneaste un QR que un desconocido puso en la pantalla… y funcionó. Un atacante no necesita más para empezar.</div>
     </div>
-
-    <!-- 3. The reveal — collapsed, driven on stage at the QR callback -->
-    <details class="reveal" id="reveal">
-      <summary>👁️ ¿Qué supo esta página de ti con solo abrirla? (ábrelo cuando lo diga el presentador)</summary>
-      <div class="readout" id="readout"></div>
-      <div class="punch">Nada de esto lo escribiste. Y no es mucho… pero un atacante no necesita mucho. Con esto, más una llamada que te apura, ya tiene por dónde empezar.</div>
-    </details>
 
     <a class="csat" href="https://pulse.amazon/survey/IBQ7CI6U" target="_blank" rel="noopener">Déjanos tu opinión (2 min, anónimo)</a>
 
@@ -105,19 +118,30 @@
     n = Math.floor(Math.random()*900)+100; // 100–999, memorable 3 digits
     try{ localStorage.setItem(KEY, String(n)); }catch(e){}
   }
-  document.getElementById('num').textContent = n;
-  document.getElementById('code').textContent = '-' + raffleCode(n);
+  // friendly count-up on the number, then reveal the code
+  (function(){
+    var numEl=document.getElementById('num'), codeEl=document.getElementById('code');
+    codeEl.textContent = '-' + raffleCode(n);
+    var dur=900, t0=null;
+    function frame(ts){
+      if(!t0) t0=ts;
+      var p=Math.min((ts-t0)/dur,1);
+      var eased=1-Math.pow(1-p,3);
+      numEl.textContent = Math.floor(100 + eased*(n-100));
+      if(p<1){ requestAnimationFrame(frame); }
+      else { numEl.textContent = n; codeEl.classList.add('show'); }
+    }
+    requestAnimationFrame(frame);
+  })();
 
-  // --- the readout: only what the browser exposes automatically; shown, never sent ---
-  function row(k,v){return '<div class="row"><span>'+k+'</span><span>'+v+'</span></div>';}
+
+  // --- what this page can see automatically; SHOWN on your phone, never sent or stored ---
   var nav=navigator, scr=screen;
   var tz=''; try{tz=Intl.DateTimeFormat().resolvedOptions().timeZone;}catch(e){tz='—';}
-  var now=new Date();
-  var ua=nav.userAgent;
-  function guess(re,d){var m=ua.match(re);return m?m[1]:d;}
+  var ua=nav.userAgent, now=new Date();
   var os='Desconocido';
   if(/iPhone|iPad/.test(ua))os='iPhone / iPad (iOS)';
-  else if(/Android/.test(ua))os=guess(/Android[ ]?([0-9.]+)/,'Android').indexOf('Android')===0?'Android':'Android '+guess(/Android[ ]?([0-9.]+)/,'');
+  else if(/Android/.test(ua))os='Android';
   else if(/Mac OS X/.test(ua))os='Mac';
   else if(/Windows/.test(ua))os='Windows';
   var br='Navegador';
@@ -125,38 +149,39 @@
   else if(/FxiOS|Firefox/.test(ua))br='Firefox';
   else if(/Safari/.test(ua)&&!/Chrome|CriOS/.test(ua))br='Safari';
   else if(/Edg/.test(ua))br='Edge';
+  var rows=[
+    ['Tu IP pública','<span id="ipval">buscando…</span>'],
+    ['Ubicación aproximada','<span id="cityval">buscando…</span>'],
+    ['Tu dispositivo',os],
+    ['Navegador',br],
+    ['Idioma del teléfono',nav.language||'—'],
+    ['Tamaño de pantalla',scr.width+' × '+scr.height],
+    ['Tu zona horaria',tz],
+    ['Hora exacta del escaneo',now.toLocaleTimeString('es-MX')]
+  ];
+  var box=document.getElementById('survrows'), rh='';
+  for(var k=0;k<rows.length;k++){ rh+='<div class="row" style="transition-delay:'+(k*280)+'ms"><span>'+rows[k][0]+'</span><span>'+rows[k][1]+'</span></div>'; }
+  if(box){ box.innerHTML=rh; }
+  requestAnimationFrame(function(){ var s=document.getElementById('surv'); if(s) s.classList.add('go'); });
 
-  var html='';
-  html+=row('Tu navegador', br);
-  html+=row('Tu sistema', os);
-  html+=row('Idioma del teléfono', nav.language||'—');
-  html+=row('Tamaño de pantalla', scr.width+' × '+scr.height);
-  html+=row('Tu zona horaria', tz);
-  html+=row('Hora exacta del escaneo', now.toLocaleTimeString('es-MX'));
-  html+=row('Ciudad aproximada', '<span id="city">buscando…</span>');
-  document.getElementById('readout').innerHTML=html;
-
-  // city via free geo-IP — stores nothing. HARD 3s timeout so the row NEVER hangs
-  // on "buscando…": if the venue network blocks or silently stalls the call, it
-  // falls back to a graceful label. To make the page 100% self-contained, delete this.
+  // IP + city via free geo-IP — shown, stored nowhere. 3s hard timeout so it never hangs.
   (function(){
-    var c=document.getElementById('city');
-    if(!c) return;
     var done=false;
-    function fallback(){ if(!done){ done=true; c.textContent='(tu ubicación aproximada)'; } }
-    var timer=setTimeout(fallback, 3000);
+    function fb(){ if(done)return; done=true;
+      var ipv=document.getElementById('ipval'); if(ipv&&/buscando/.test(ipv.textContent)) ipv.textContent='(oculta por tu red)';
+      var cv=document.getElementById('cityval'); if(cv&&/buscando/.test(cv.textContent)) cv.textContent='(tu zona aproximada)';
+    }
+    var timer=setTimeout(fb,3000);
     try{
       var ctrl=('AbortController' in window)?new AbortController():null;
-      if(ctrl){ setTimeout(function(){ try{ctrl.abort();}catch(e){} }, 3000); }
-      fetch('https://ipwho.is/?fields=city,region,country', ctrl?{signal:ctrl.signal}:{})
+      if(ctrl) setTimeout(function(){try{ctrl.abort();}catch(e){}},3000);
+      fetch('https://ipwho.is/?fields=ip,city,region,country', ctrl?{signal:ctrl.signal}:{})
         .then(function(r){return r.json();})
-        .then(function(d){
-          if(done) return; done=true; clearTimeout(timer);
-          if(d&&d.city){c.textContent=d.city+(d.region?', '+d.region:'')+(d.country?', '+d.country:'');}
-          else{c.textContent='(tu ubicación aproximada)';}
-        })
-        .catch(fallback);
-    }catch(e){ fallback(); }
+        .then(function(d){ if(done)return; done=true; clearTimeout(timer);
+          var ipv=document.getElementById('ipval'); if(ipv) ipv.textContent=(d&&d.ip)?d.ip:'(oculta)';
+          var cv=document.getElementById('cityval'); if(cv) cv.textContent=(d&&d.city)?(d.city+(d.region?', '+d.region:'')+(d.country?', '+d.country:'')):'(tu zona aproximada)';
+        }).catch(fb);
+    }catch(e){ fb(); }
   })();
 })();
 </script>
