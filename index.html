@@ -136,15 +136,28 @@
   html+=row('Ciudad aproximada', '<span id="city">buscando…</span>');
   document.getElementById('readout').innerHTML=html;
 
-  // city via free geo-IP — stores nothing, degrades silently if offline/blocked.
-  // To make the page 100% self-contained (no external call at all), delete this block.
-  try{
-    fetch('https://ipwho.is/?fields=city,region,country').then(function(r){return r.json();}).then(function(d){
-      var c=document.getElementById('city');
-      if(d&&d.city){c.textContent=d.city+(d.region?', '+d.region:'')+(d.country?', '+d.country:'');}
-      else{c.textContent='(tu ubicación aproximada)';}
-    }).catch(function(){var c=document.getElementById('city');if(c)c.textContent='(tu ubicación aproximada)';});
-  }catch(e){}
+  // city via free geo-IP — stores nothing. HARD 3s timeout so the row NEVER hangs
+  // on "buscando…": if the venue network blocks or silently stalls the call, it
+  // falls back to a graceful label. To make the page 100% self-contained, delete this.
+  (function(){
+    var c=document.getElementById('city');
+    if(!c) return;
+    var done=false;
+    function fallback(){ if(!done){ done=true; c.textContent='(tu ubicación aproximada)'; } }
+    var timer=setTimeout(fallback, 3000);
+    try{
+      var ctrl=('AbortController' in window)?new AbortController():null;
+      if(ctrl){ setTimeout(function(){ try{ctrl.abort();}catch(e){} }, 3000); }
+      fetch('https://ipwho.is/?fields=city,region,country', ctrl?{signal:ctrl.signal}:{})
+        .then(function(r){return r.json();})
+        .then(function(d){
+          if(done) return; done=true; clearTimeout(timer);
+          if(d&&d.city){c.textContent=d.city+(d.region?', '+d.region:'')+(d.country?', '+d.country:'');}
+          else{c.textContent='(tu ubicación aproximada)';}
+        })
+        .catch(fallback);
+    }catch(e){ fallback(); }
+  })();
 })();
 </script>
 </body>
